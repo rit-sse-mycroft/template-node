@@ -144,9 +144,10 @@ function queryFail(client, id, message) {
 //Sends a message to the Mycroft global message board.
 function broadcast(client, content) {
   message = {
+    id: uuid.v4(),
     content: content
   };
-  sendMessage(connclientection, 'MSG_BROADCAST', message);
+  sendMessage(client, 'MSG_BROADCAST', message);
 }
 
 // Checks if the manifest was validated and returns dependencies
