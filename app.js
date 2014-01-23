@@ -88,7 +88,7 @@ function connectToMycroft(appName) {
 
 //Given the path to a JSON manifest, converts that manifest to a string,
 //and precedes it with the type MANIFEST
-function sendManifest(connection, path) {
+function sendManifest(client, path) {
   try {
     var manifest = require(path);
   }
@@ -96,20 +96,20 @@ function sendManifest(connection, path) {
     console.error('Invalid file path');
   }
   console.log('Sending Manifest');
-  sendMessage(connection, 'APP_MANIFEST', manifest)
+  sendMessage(client, 'APP_MANIFEST', manifest)
 }
 
-function up(connection) {
+function up(client) {
   console.log('Sending App Up');
-  sendMessage(connection, 'APP_UP');
+  sendMessage(client, 'APP_UP');
 }
 
-function down(connection) {
+function down(client) {
   console.log('Sending App Down');
-  sendMessage(connection, 'APP_DOWN');
+  sendMessage(client, 'APP_DOWN');
 }
 
-function query(connection, capability, action, data, instanceId, priority) {
+function query(client, capability, action, data, instanceId, priority) {
   queryMessage = {
     id: uuid.v4(),
     capability: capability,
@@ -120,15 +120,33 @@ function query(connection, capability, action, data, instanceId, priority) {
   };
   if (typeof(instanceId) != 'undefined') queryMessage.instanceId = instanceId;
 
-  sendMessage(connection, 'MSG_QUERY', queryMessage);
+  sendMessage(client, 'MSG_QUERY', queryMessage);
+}
+
+function querySuccess(client, id, ret ) {
+  var querySuccessMessage = {
+    id: id,
+    ret: ret
+  };
+
+  sendMessage(client, 'MSG_QUERY_SUCCESS', querySuccessMessage);
+}
+
+function queryFail(client, id, message) {
+  var queryFailMessage = {
+    id: id,
+    message: message
+  };
+
+  sendMessage(client, 'MSG_QUERY_FAIL', queryFailMessage);
 }
 
 //Sends a message to the Mycroft global message board.
-function broadcast(connection, content) {
+function broadcast(client, content) {
   message = {
     content: content
   };
-  sendMessage(connection, 'MSG_BROADCAST', message);
+  sendMessage(connclientection, 'MSG_BROADCAST', message);
 }
 
 // Checks if the manifest was validated and returns dependencies
@@ -148,7 +166,7 @@ function manifestCheck(parsed) {
 
 //Sends a message of specified type. Adds byte length before message.
 //Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
-function sendMessage(connection, type, message) {
+function sendMessage(client, type, message) {
   if (typeof(message) === 'undefined') {
     message = '';
   } else {
@@ -159,7 +177,7 @@ function sendMessage(connection, type, message) {
   console.log('Sending Message');
   console.log(length);
   console.log(body);
-  connection.write(length + '\n' + body);
+  client.write(length + '\n' + body);
 
 }
 
@@ -169,5 +187,7 @@ exports.sendManifest = sendManifest;
 exports.up = up;
 exports.down = down;
 exports.query = query;
+exports.querySuccess = querySuccess;
+exports.queryFail = queryFail;
 exports.broadcast = broadcast;
 exports.manifestCheck = manifestCheck;
