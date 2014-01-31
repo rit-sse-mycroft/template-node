@@ -1,194 +1,288 @@
+`
 var tls = require('tls');
 var net = require('net');
-var uuid = require('uuid');
+//var uuid = require('uuid');
+var node_crypto = require('crypto');
+var rby = function(bytes) {
+  return node_crypto.randomBytes(bytes).toString('hex');
+}
+var uuid = {v4: function() {
+    return (rby(4)+'-'+rby(2)+'-4'+rby(2).slice(1)+'-a'+rby(2).slice(1)+'-'+rby(6)) //This is a terrible hack
+}};
 var fs = require('fs');
+var sys = require('sys')
+var exec = require('child_process').exec;
+var http = require('http')
 var MYCROFT_PORT = 1847;
 
-var _unconsumed = '';
+var Mycroft = function(manifest, host, port) {
 
-// Parses a received message and returns an array of commands as
-// an Object containing type:String and data:Object.
-function parseMessage(msg) {
-  // Add the message to unconsumed.
-  _unconsumed += msg.toString().trim();
-  // Create an array for the newly parsed commands.
-  var parsedCommands = [];
+  this.status = 'down';
+  this.host = host || 'localhost';
+  this.manifest_loc = manifest || 'app.json';
+  this.port = port || MYCROFT_PORT;
+  this.handlers = {};
 
-  while (_unconsumed != '') {
-    // Get the message-length to read.
-    var verbStart = _unconsumed.indexOf('\n');
-    var msgLen = parseInt(_unconsumed.substr(0, verbStart));
-    // Cut off the message length header from unconsumed.
-    _unconsumed = _unconsumed.substr(verbStart+1);
-    // Figure out how many bytes we have left to consume.
-    var bytesLeft = Buffer.byteLength(_unconsumed, 'utf8');
-    // Do not process anything if we do not have enough bytes.
-    if (bytesLeft < msgLen) {
-      break;
+  this._unconsumed = '';
+
+  // Parses a received message and returns an array of commands as
+  // an Object containing type:String and data:Object.
+  // There is not a doubt in my mind that this is not poorly written
+  this.parseMessage = function (msg) {
+    // Add the message to unconsumed.
+    this._unconsumed += msg.toString().trim();
+    // Create an array for the newly parsed commands.
+    var parsedCommands = [];
+
+    while (this._unconsumed != '') {
+      // Get the message-length to read.
+      var verbStart = this._unconsumed.indexOf('\n');
+      var msgLen = parseInt(this._unconsumed.substr(0, verbStart));
+      // Cut off the message length header from unconsumed.
+      this._unconsumed = this._unconsumed.substr(verbStart+1);
+      // Figure out how many bytes we have left to consume.
+      var bytesLeft = Buffer.byteLength(this._unconsumed, 'utf8');
+      // Do not process anything if we do not have enough bytes.
+      if (bytesLeft < msgLen) {
+        break;
+      }
+      // Isolate the message we are actually handling.
+      var unconsumedBuffer = new Buffer(this._unconsumed);
+      msg = unconsumedBuffer.slice(0, msgLen).toString();
+      // Store remaining stuff in unconsumed.
+      this._unconsumed = unconsumedBuffer.slice(msgLen).toString();
+      // Go process this single message.
+      console.log('Got message:');
+      console.log(msg);
+      var type = '';
+      var data = {};
+      var index = msg.indexOf(' ');
+      if (index >= 0) { // If a body was supplied
+        type = msg.substr(0, index);
+        try {
+          var toParse = msg.substr(index);
+          data = JSON.parse(toParse);
+        }
+        catch(err) {
+          console.log('Recieved malformed message, responding with MSG_MALFORMED');
+          this.sendMessage("MSG_MALFORMED \n" + err);
+          return;
+        }
+      } else { // No body was supplied
+        type = msg;
+      }
+
+      parsedCommands.push({type: type, data: data});
     }
-    // Isolate the message we are actually handling.
-    var unconsumedBuffer = new Buffer(_unconsumed);
-    msg = unconsumedBuffer.slice(0, msgLen).toString();
-    // Store remaining stuff in unconsumed.
-    _unconsumed = unconsumedBuffer.slice(msgLen).toString();
-    // Go process this single message.
-    console.log('Got message:');
-    console.log(msg);
-    var type = '';
-    var data = {};
-    var index = msg.indexOf(' {');
-    if (index >= 0) { // If a body was supplied
-      type = msg.substr(0, index);
-      try {
-        var toParse = msg.substr(index+1);
-        data = JSON.parse(toParse);
-      }
-      catch(err) {
-        console.error('Malformed message 01');
-        sendMessage(cli, "MSG_MALFORMED \n" + err);
-        return;
-      }
-    } else { // No body was supplied
-      type = msg;
-    }
-
-    parsedCommands.push({type: type, data: data});
+    return parsedCommands;
   }
-  return parsedCommands;
-}
 
-// If using TLS, appName is assumed to be the name of the keys.
-function connectToMycroft(appName) {
-  var client = null;
-  if (process.argv.length === 3 && process.argv[2] === '--no-tls') {
-    console.log("Not using TLS");
-    client = net.connect({port: 1847}, function(err) {
-      if (err) {
-        console.error('There was an error establishing connection');
-      }
-    });
-  } else {
-    console.log("Using TLS");
-    var connectOptions = {
-      key: fs.readFileSync(appName + '.key'),
-      cert: fs.readFileSync(appName + '.crt'),
-      ca: [ fs.readFileSync('ca.crt') ],
-      rejectUnauthorized: false,
-      port: MYCROFT_PORT
-    };
-    client = tls.connect(connectOptions, function(err) {
-      if (err) {
-        console.error('There was an error in establishing TLS connection');
-      }
-    });
-  }
-  console.log('Connected to Mycroft');
-  return client;
-}
-
-//Given the path to a JSON manifest, converts that manifest to a string,
-//and precedes it with the type MANIFEST
-function sendManifest(client, path) {
-  try {
-    var manifest = require(path);
-  }
-  catch(err) {
-    console.error('Invalid file path');
-  }
-  console.log('Sending Manifest');
-  sendMessage(client, 'APP_MANIFEST', manifest)
-}
-
-function up(client) {
-  console.log('Sending App Up');
-  sendMessage(client, 'APP_UP');
-}
-
-function down(client) {
-  console.log('Sending App Down');
-  sendMessage(client, 'APP_DOWN');
-}
-
-function query(client, capability, action, data, instanceId, priority) {
-  queryMessage = {
-    id: uuid.v4(),
-    capability: capability,
-    action: action,
-    data: data,
-    priority: priority,
-
-  };
-  if (typeof(instanceId) != 'undefined') queryMessage.instanceId = instanceId;
-
-  sendMessage(client, 'MSG_QUERY', queryMessage);
-}
-
-function querySuccess(client, id, ret ) {
-  var querySuccessMessage = {
-    id: id,
-    ret: ret
-  };
-
-  sendMessage(client, 'MSG_QUERY_SUCCESS', querySuccessMessage);
-}
-
-function queryFail(client, id, message) {
-  var queryFailMessage = {
-    id: id,
-    message: message
-  };
-
-  sendMessage(client, 'MSG_QUERY_FAIL', queryFailMessage);
-}
-
-//Sends a message to the Mycroft global message board.
-function broadcast(client, content) {
-  message = {
-    id: uuid.v4(),
-    content: content
-  };
-  sendMessage(client, 'MSG_BROADCAST', message);
-}
-
-// Checks if the manifest was validated and returns dependencies
-function manifestCheck(parsed) {
-  if (parsed.type === 'APP_MANIFEST_OK' || parsed.type === 'APP_MANIFEST_FAIL') {
-    console.log('Response type: ' +  parsed.type);
-    console.log('Response recieved: ' + JSON.stringify(parsed.data));
-
-    if (parsed.type === 'APP_MANIFEST_OK') {
-      console.log('Manifest Validated');
-      return parsed.data.dependencies;
+  // If using TLS, appName is assumed to be the name of the keys.
+  //process.argv.length === 3 && process.argv[2] === '--no-tls'
+  this.connect = function (cert_name) {
+    var client = null;
+    if (!cert_name) {
+      console.log("Not using TLS");
+      client = net.connect({port: this.port, host:this.host}, function(err) {
+        if (err) {
+          console.error('There was an error establishing connection');
+        }
+      });
+      var obj = this;
+      client.on('error', function(err) {
+        console.log("Connection error!")
+        console.log(err)
+        obj.handle('CONNECTION_ERROR', err)
+      });
     } else {
-      throw 'Invalid application manifest';
+      console.log("Using TLS");
+      var connectOptions = {
+        key: fs.readFileSync(cert_name + '.key'),
+        cert: fs.readFileSync(cert_name + '.crt'),
+        ca: [ fs.readFileSync('ca.crt') ],
+        rejectUnauthorized: false,
+        port: this.port,
+        host: this.host
+      };
+      client = tls.connect(connectOptions, function(err) {
+        if (err) {
+          console.error('There was an error in establishing TLS connection');
+        }
+      });
+      var obj = this;
+      client.on('error', function(err) {
+        console.log("Connection error!")
+        console.log(err)
+        obj.handle('CONNECTION_ERROR', err)
+      });
+    }
+    console.log('Connected to Mycroft');
+    this.cli = client;
+    var obj = this;
+    this.cli.on('data', function(msg) {
+      var parsed = obj.parseMessage(msg);
+      for(var i = 0; i < parsed.length; i++) {
+        obj.handle(parsed[i].type, parsed[i].data);
+      }
+    });
+    this.cli.on('end', function(data) {
+      obj.connectionClosed(data);
+    });
+  }
+
+  this.on = function(name, func) {
+    if (!this.handlers[name]) {
+      this.handlers[name] = [];
+    }
+    this.handlers[name].push(func);
+  }
+
+  this.connectionClosed = function(data) {
+    this.handle('CONNECTION_CLOSED', data)
+    console.log("Connection closed.");
+  }
+
+  this.handle = function(type, data) {
+    if (this.handlers[type]) {
+      for (var i=0; i<this.handlers[type].length; i++) {
+        this.handlers[type][i](data);
+      }
+    } else {
+      console.log("not handling messages:");
+      console.log(type+": "+JSON.stringify(data));
     }
   }
-}
 
-//Sends a message of specified type. Adds byte length before message.
-//Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
-function sendMessage(client, type, message) {
-  if (typeof(message) === 'undefined') {
-    message = '';
-  } else {
-    message = JSON.stringify(message);
+  //Given the path to a JSON manifest, converts that manifest to a string,
+  //and precedes it with the type MANIFEST
+  this.sendManifest = function (path) {
+    var obj = this;
+    var path = path || this.manifest_loc; //use manifest location from constructor if possible
+    try {
+      console.log("Reading a manifest!")
+      fs.readFile(path, 'utf-8', function(err, data) {
+        if (err) {
+          console.log("Error reading manifest:");
+          console.log(err);
+          obj.handle('MANIFEST_ERROR', err);
+        }
+
+        var json;
+        try {
+          json = JSON.parse(data);
+        }
+        catch(err) {
+          console.log("Error parsing manifest:");
+          console.log(err);
+          obj.handle('MANIFEST_ERROR', err);
+        }
+
+        if (json) {
+          console.log('Sending Manifest');
+          obj.sendMessage('APP_MANIFEST', json);
+        }
+      })
+    }
+    catch(err) {
+      console.error('Invalid file path');
+      this.handle('MANIFEST_ERROR', err);
+    }
   }
-  var body = (type + ' ' + message).trim();
-  var length = Buffer.byteLength(body, 'utf8');
-  console.log('Sending Message');
-  console.log(length);
-  console.log(body);
-  client.write(length + '\n' + body);
 
+  this.up = function() {
+    console.log('Sending App Up');
+    this.status = 'up';
+    this.sendMessage('APP_UP');
+  }
+
+  this.down = function() {
+    console.log('Sending App Down');
+    this.status = 'down';
+    this.sendMessage('APP_DOWN');
+  }
+
+  this.in_use = function() {
+    console.log('Sending App In Use');
+    this.status = 'in use';
+    this.sendMessage('APP_IN_USE');
+  }
+
+  this.query = function (capability, action, data, instanceId, priority) {
+    console.log('Sending query!')
+    var queryMessage = {
+      id: uuid.v4(),
+      capability: capability,
+      action: action || '',
+      data: data || '',
+      priority: priority || 30,
+
+    };
+    if (typeof(instanceId) != 'undefined') queryMessage.instanceId = instanceId;
+
+    this.sendMessage('MSG_QUERY', queryMessage);
+  }
+
+  this.sendSuccess = function(id, ret) {
+    var querySuccessMessage = {
+      id: id,
+      ret: ret
+    };
+
+    this.sendMessage('MSG_QUERY_SUCCESS', querySuccessMessage);
+  }
+
+  this.sendFail = function (id, message) {
+    var queryFailMessage = {
+      id: id,
+      message: message
+    };
+
+    this.sendMessage('MSG_QUERY_FAIL', queryFailMessage);
+  }
+
+  //Sends a message to the Mycroft global message board.
+  this.broadcast = function(content) {
+    message = {
+      id: uuid.v4(),
+      content: content
+    };
+    this.sendMessage('MSG_BROADCAST', message);
+  }
+
+  // Checks if the manifest was validated and returns dependencies
+  this.checkManifest = function (parsed) {
+    if (parsed.type === 'APP_MANIFEST_OK' || parsed.type === 'APP_MANIFEST_FAIL') {
+      console.log('Response type: ' +  parsed.type);
+      console.log('Response recieved: ' + JSON.stringify(parsed.data));
+
+      if (parsed.type === 'APP_MANIFEST_OK') {
+        console.log('Manifest Validated');
+        return parsed.data.dependencies; //THIS WILL ALWAYS BE NIL WITH CURRENT DESIGN
+      } else {
+        throw 'Invalid application manifest';
+      }
+    }
+  }
+
+  //Sends a message of specified type. Adds byte length before message.
+  //Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
+  this.sendMessage = function (type, message) {
+    if (typeof(message) === 'undefined') {
+      message = '';
+    } else {
+      message = JSON.stringify(message);
+    }
+    var body = (type + ' ' + message).trim();
+    var length = Buffer.byteLength(body, 'utf8');
+    console.log('Sending Message');
+    console.log(length);
+    console.log(body);
+    if (this.cli) {
+      this.cli.write(length + '\n' + body);
+    } else {
+      console.log("The client connection wasn't established, so the message could not be sent.");
+    }
+  }
+
+  return this;
 }
-
-exports.parseMessage = parseMessage
-exports.connectToMycroft = connectToMycroft;
-exports.sendManifest = sendManifest;
-exports.up = up;
-exports.down = down;
-exports.query = query;
-exports.querySuccess = querySuccess;
-exports.queryFail = queryFail;
-exports.broadcast = broadcast;
-exports.manifestCheck = manifestCheck;
