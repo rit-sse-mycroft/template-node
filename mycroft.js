@@ -13,7 +13,7 @@ function parseMessage(msg) {
   _unconsumed += msg.toString().trim();
   // Create an array for the newly parsed commands.
   var parsedCommands = [];
-  
+
   while (_unconsumed != '') {
     // Get the message-length to read.
     var verbStart = _unconsumed.indexOf('\n');
@@ -51,7 +51,7 @@ function parseMessage(msg) {
     } else { // No body was supplied
       type = msg;
     }
-    
+
     parsedCommands.push({type: type, data: data});
   }
   return parsedCommands;
