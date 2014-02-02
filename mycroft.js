@@ -15,7 +15,7 @@ var http = require('http')
 var winston = require('winston');
 var logger = new (winston.Logger)({
   transports: [
-    new (winston.transports.Console)({ colorize: true, timestamp: true }),
+    new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
   ]
 });
 
@@ -76,7 +76,7 @@ var Mycroft = function(manifest, host, port) {
         type = msg;
       }
 
-      logger.info('Got message:' + type);
+      logger.info('Got message: ' + type);
       logger.debug(msg);
 
       parsedCommands.push({type: type, data: data});
