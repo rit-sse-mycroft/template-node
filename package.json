@@ -1,0 +1,25 @@
+{
+  "name": "mycroft",
+  "version": "0.0.0",
+  "description": "node app template for mycroft",
+  "main": "mycroft.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rit-sse-mycroft/app-templates.git"
+  },
+  "author": "Society of Software Engineers",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/rit-sse-mycroft/app-templates/issues"
+  },
+  "homepage": "https://github.com/rit-sse-mycroft/app-templates",
+  "dependencies": {
+    "winston": "~0.7.2"
+  },
+  "devDependencies": {
+    "mocha": "~1.17.1"
+  }
+}
