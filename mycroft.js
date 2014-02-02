@@ -12,6 +12,13 @@ var fs = require('fs');
 var sys = require('sys')
 var exec = require('child_process').exec;
 var http = require('http')
+var winston = require('winston');
+var logger = new (winston.Logger)({
+  transports: [
+    new (winston.transports.Console)({ colorize: true, timestamp: true }),
+  ]
+});
+
 var MYCROFT_PORT = 1847;
 
 var Mycroft = function(manifest, host, port) {
@@ -51,8 +58,6 @@ var Mycroft = function(manifest, host, port) {
       // Store remaining stuff in unconsumed.
       this._unconsumed = unconsumedBuffer.slice(msgLen).toString();
       // Go process this single message.
-      console.log('Got message:');
-      console.log(msg);
       var type = '';
       var data = {};
       var index = msg.indexOf(' ');
@@ -63,13 +68,16 @@ var Mycroft = function(manifest, host, port) {
           data = JSON.parse(toParse);
         }
         catch(err) {
-          console.log('Recieved malformed message, responding with MSG_MALFORMED');
+          logger.error('Recieved malformed message, responding with MSG_MALFORMED');
           this.sendMessage("MSG_MALFORMED \n" + err);
           return;
         }
       } else { // No body was supplied
         type = msg;
       }
+
+      logger.info('Got message:' + type);
+      logger.debug(msg);
 
       parsedCommands.push({type: type, data: data});
     }
@@ -81,20 +89,20 @@ var Mycroft = function(manifest, host, port) {
   this.connect = function (cert_name) {
     var client = null;
     if (!cert_name) {
-      console.log("Not using TLS");
+      logger.info("Not using TLS");
       client = net.connect({port: this.port, host:this.host}, function(err) {
         if (err) {
-          console.error('There was an error establishing connection');
+          logger.error('There was an error establishing connection');
         }
       });
       var obj = this;
       client.on('error', function(err) {
-        console.log("Connection error!")
-        console.log(err)
+        logger.error("Connection error!")
+        logger.error(err)
         obj.handle('CONNECTION_ERROR', err)
       });
     } else {
-      console.log("Using TLS");
+      logger.info("Using TLS");
       var connectOptions = {
         key: fs.readFileSync(cert_name + '.key'),
         cert: fs.readFileSync(cert_name + '.crt'),
@@ -105,17 +113,17 @@ var Mycroft = function(manifest, host, port) {
       };
       client = tls.connect(connectOptions, function(err) {
         if (err) {
-          console.error('There was an error in establishing TLS connection');
+          logger.error('There was an error in establishing TLS connection');
         }
       });
       var obj = this;
       client.on('error', function(err) {
-        console.log("Connection error!")
-        console.log(err)
+        logger.error("Connection error!")
+        logger.error(err)
         obj.handle('CONNECTION_ERROR', err)
       });
     }
-    console.log('Connected to Mycroft');
+    logger.info('Connected to Mycroft');
     this.cli = client;
     var obj = this;
     this.cli.on('data', function(msg) {
@@ -138,7 +146,7 @@ var Mycroft = function(manifest, host, port) {
 
   this.connectionClosed = function(data) {
     this.handle('CONNECTION_CLOSED', data)
-    console.log("Connection closed.");
+    logger.error("Connection closed.");
   }
 
   this.handle = function(type, data) {
@@ -147,8 +155,8 @@ var Mycroft = function(manifest, host, port) {
         this.handlers[type][i](data);
       }
     } else {
-      console.log("not handling messages:");
-      console.log(type+": "+JSON.stringify(data));
+      logger.warn("not handling messages:");
+      logger.warn(type+": "+JSON.stringify(data));
     }
   }
 
@@ -158,11 +166,11 @@ var Mycroft = function(manifest, host, port) {
     var obj = this;
     var path = path || this.manifest_loc; //use manifest location from constructor if possible
     try {
-      console.log("Reading a manifest!")
+      logger.debug("Reading a manifest!")
       fs.readFile(path, 'utf-8', function(err, data) {
         if (err) {
-          console.log("Error reading manifest:");
-          console.log(err);
+          logger.error("Error reading manifest:");
+          logger.error(err);
           obj.handle('MANIFEST_ERROR', err);
         }
 
@@ -171,43 +179,43 @@ var Mycroft = function(manifest, host, port) {
           json = JSON.parse(data);
         }
         catch(err) {
-          console.log("Error parsing manifest:");
-          console.log(err);
+          logger.error("Error parsing manifest:");
+          logger.error(err);
           obj.handle('MANIFEST_ERROR', err);
         }
 
         if (json) {
-          console.log('Sending Manifest');
+          logger.info('Sending Manifest');
           obj.sendMessage('APP_MANIFEST', json);
         }
       })
     }
     catch(err) {
-      console.error('Invalid file path');
+      logger.error('Invalid file path');
       this.handle('MANIFEST_ERROR', err);
     }
   }
 
   this.up = function() {
-    console.log('Sending App Up');
+    logger.info('Sending App Up');
     this.status = 'up';
     this.sendMessage('APP_UP');
   }
 
   this.down = function() {
-    console.log('Sending App Down');
+    logger.info('Sending App Down');
     this.status = 'down';
     this.sendMessage('APP_DOWN');
   }
 
   this.in_use = function() {
-    console.log('Sending App In Use');
+    logger.info('Sending App In Use');
     this.status = 'in use';
     this.sendMessage('APP_IN_USE');
   }
 
   this.query = function (capability, action, data, instanceId, priority) {
-    console.log('Sending query!')
+    logger.info('Sending query')
     var queryMessage = {
       id: uuid.v4(),
       capability: capability,
@@ -222,6 +230,7 @@ var Mycroft = function(manifest, host, port) {
   }
 
   this.sendSuccess = function(id, ret) {
+    logger.info('Sending query success')
     var querySuccessMessage = {
       id: id,
       ret: ret
@@ -231,6 +240,7 @@ var Mycroft = function(manifest, host, port) {
   }
 
   this.sendFail = function (id, message) {
+    logger.info('Sending query fail')
     var queryFailMessage = {
       id: id,
       message: message
@@ -241,6 +251,7 @@ var Mycroft = function(manifest, host, port) {
 
   //Sends a message to the Mycroft global message board.
   this.broadcast = function(content) {
+    logger.info('Sending broadcast');
     message = {
       id: uuid.v4(),
       content: content
@@ -248,19 +259,17 @@ var Mycroft = function(manifest, host, port) {
     this.sendMessage('MSG_BROADCAST', message);
   }
 
-  // Checks if the manifest was validated and returns dependencies
-  this.checkManifest = function (parsed) {
-    if (parsed.type === 'APP_MANIFEST_OK' || parsed.type === 'APP_MANIFEST_FAIL') {
-      console.log('Response type: ' +  parsed.type);
-      console.log('Response recieved: ' + JSON.stringify(parsed.data));
+  this.appManifestOk = function(){
+    logger.info('Manifest Validated');
+  }
 
-      if (parsed.type === 'APP_MANIFEST_OK') {
-        console.log('Manifest Validated');
-        return parsed.data.dependencies; //THIS WILL ALWAYS BE NIL WITH CURRENT DESIGN
-      } else {
-        throw 'Invalid application manifest';
-      }
-    }
+  this.appManifestFail = function(){
+    logger.error('Invalid application manifest')
+    throw 'Invalid application manifest';
+  }
+
+  this.msgGeneralFailure = function(data){
+    logger.error(data.message);
   }
 
   //Sends a message of specified type. Adds byte length before message.
@@ -273,15 +282,16 @@ var Mycroft = function(manifest, host, port) {
     }
     var body = (type + ' ' + message).trim();
     var length = Buffer.byteLength(body, 'utf8');
-    console.log('Sending Message');
-    console.log(length);
-    console.log(body);
+    logger.debug(length + ' ' + body);
     if (this.cli) {
       this.cli.write(length + '\n' + body);
     } else {
-      console.log("The client connection wasn't established, so the message could not be sent.");
+      logger.error("The client connection wasn't established, so the message could not be sent.");
     }
   }
 
   return this;
 }
+
+exports.Mycroft = Mycroft
+exports.logger = logger
