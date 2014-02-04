@@ -19,6 +19,18 @@ var logger = new (winston.Logger)({
   ]
 });
 
+var readLine = require("readline");
+if(process.platform === "win32"){
+  var rl = readLine.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  rl.on("SIGINT", function (){
+    process.emit ("SIGINT");
+  });
+}
+
 var MYCROFT_PORT = 1847;
 
 var Mycroft = function(manifest, host, port) {
@@ -30,6 +42,13 @@ var Mycroft = function(manifest, host, port) {
   this.handlers = {};
 
   this._unconsumed = '';
+
+  var obj = this
+  process.on("SIGINT", function(){
+    //graceful shutdown
+    obj.connectionClosed();
+    process.exit();
+  });
 
   // Parses a received message and returns an array of commands as
   // an Object containing type:String and data:Object.
