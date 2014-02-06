@@ -1,13 +1,10 @@
 var tls = require('tls');
 var net = require('net');
-//var uuid = require('uuid');
 var node_crypto = require('crypto');
 var rby = function(bytes) {
   return node_crypto.randomBytes(bytes).toString('hex');
 }
-var uuid = {v4: function() {
-    return (rby(4)+'-'+rby(2)+'-4'+rby(2).slice(1)+'-a'+rby(2).slice(1)+'-'+rby(6)) //This is a terrible hack
-}};
+var uuid = require('uuid');
 var fs = require('fs');
 var sys = require('sys')
 var exec = require('child_process').exec;
@@ -87,7 +84,7 @@ var Mycroft = function(manifest, host, port) {
           data = JSON.parse(toParse);
         }
         catch(err) {
-          logger.error('Recieved malformed message, responding with MSG_MALFORMED');
+          logger.error('Received malformed message, responding with MSG_MALFORMED');
           this.sendMessage("MSG_MALFORMED \n" + err);
           return;
         }

@@ -17,7 +17,8 @@
   },
   "homepage": "https://github.com/rit-sse-mycroft/app-templates",
   "dependencies": {
-    "winston": "~0.7.2"
+    "winston": "~0.7.2",
+    "uuid": "~1.4.1"
   },
   "devDependencies": {
     "mocha": "~1.17.1"
