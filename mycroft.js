@@ -1,9 +1,6 @@
 var tls = require('tls');
 var net = require('net');
 var node_crypto = require('crypto');
-var rby = function(bytes) {
-  return node_crypto.randomBytes(bytes).toString('hex');
-}
 var uuid = require('uuid');
 var fs = require('fs');
 var sys = require('sys')

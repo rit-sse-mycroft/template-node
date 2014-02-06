@@ -11,7 +11,7 @@
     "url": "https://github.com/rit-sse-mycroft/app-templates.git"
   },
   "author": "Society of Software Engineers",
-  "license": "ISC",
+  "license": "BSD",
   "bugs": {
     "url": "https://github.com/rit-sse-mycroft/app-templates/issues"
   },
