@@ -43,11 +43,11 @@ var Mycroft = function(name, manifest, host, port) {
   fs.mkdir('logs', function(err){});
 
   this.logger = new (winston.Logger)({
-  transports: [
-    new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
-    new (winston.transports.DailyRotateFile)({dirname: 'logs', filename: name + '.log', timestamp: true, json: false})
-  ]
-});
+    transports: [
+      new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
+      new (winston.transports.DailyRotateFile)({dirname: 'logs', filename: name + '.log', timestamp: true, json: false})
+    ]
+  });
 
   // Parses a received message and returns an array of commands as
   // an Object containing type:String and data:Object.
@@ -308,6 +308,19 @@ var Mycroft = function(name, manifest, host, port) {
       this.logger.error("The client connection wasn't established, so the message could not be sent.");
     }
   }
+
+  // Some generic handlers that all apps will use
+  this.on('APP_MANIFEST_OK', function(data){
+    obj.appManifestOk();
+  });
+
+  this.on('APP_MANIFEST_FAIL', function(data){
+    obj.appManifestFail();
+  });
+
+  this.on('MSG_GENERAL_FAILURE', function(data){
+    obj.msgGeneralFailure(data);
+  });
 
   return this;
 }
