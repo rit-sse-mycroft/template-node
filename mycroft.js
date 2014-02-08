@@ -241,9 +241,8 @@ var Mycroft = function(name, manifest, host, port) {
       action: action || '',
       data: data || '',
       priority: priority || 30,
-
+      instanceId: instanceId || []
     };
-    if (typeof(instanceId) != 'undefined') queryMessage.instanceId = instanceId;
 
     this.sendMessage('MSG_QUERY', queryMessage);
   }
@@ -306,6 +305,15 @@ var Mycroft = function(name, manifest, host, port) {
       this.cli.write(length + '\n' + body);
     } else {
       this.logger.error("The client connection wasn't established, so the message could not be sent.");
+    }
+  }
+
+  this.updateDependencies = function(deps) {
+    for(capability in deps){
+      this.dependencies.capability = this.dependencies.capability || {};
+      for(appId in deps.capability){
+        this.dependencies.capability.appId = deps.capability.appId;
+      }
     }
   }
 
