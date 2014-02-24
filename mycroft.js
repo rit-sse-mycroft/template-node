@@ -1,15 +1,19 @@
+/* jshint node: true */
 var tls = require('tls');
 var net = require('net');
+var util = require('util');
 var node_crypto = require('crypto');
 var uuid = require('uuid');
 var fs = require('fs');
-var sys = require('sys')
+var sys = require('sys');
 var exec = require('child_process').exec;
-var http = require('http')
+var http = require('http');
 var winston = require('winston');
-var fs = require('fs')
-
+var fs = require('fs');
+var EventEmitter = require('events').EventEmitter;
 var readLine = require("readline");
+
+//Automatically adjust for win32 applications
 if(process.platform === "win32"){
   var rl = readLine.createInterface({
     input: process.stdin,
@@ -21,6 +25,7 @@ if(process.platform === "win32"){
   });
 }
 
+//Default mycroft port, used if port is not passed to constructor
 var MYCROFT_PORT = 1847;
 
 var Mycroft = function(name, manifest, host, port) {
@@ -29,19 +34,22 @@ var Mycroft = function(name, manifest, host, port) {
   this.host = host || 'localhost';
   this.manifest_loc = manifest || 'app.json';
   this.port = port || MYCROFT_PORT;
-  this.handlers = {};
+  this.dependencies = {};
 
   this._unconsumed = '';
 
-  var obj = this
+  //Call our handler when the process dies and close the connection
+  var obj = this;
   process.on("SIGINT", function(){
     //graceful shutdown
     obj.connectionClosed();
     process.exit();
   });
 
+  //Make a folder to put our logs in
   fs.mkdir('logs', function(err){});
 
+  //Build and initialize the logger object
   this.logger = new (winston.Logger)({
     transports: [
       new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
@@ -58,7 +66,7 @@ var Mycroft = function(name, manifest, host, port) {
     // Create an array for the newly parsed commands.
     var parsedCommands = [];
 
-    while (this._unconsumed != '') {
+    while (this._unconsumed !== '') {
       // Get the message-length to read.
       var verbStart = this._unconsumed.indexOf('\n');
       var msgLen = parseInt(this._unconsumed.substr(0, verbStart));
@@ -100,10 +108,9 @@ var Mycroft = function(name, manifest, host, port) {
       parsedCommands.push({type: type, data: data});
     }
     return parsedCommands;
-  }
+  };
 
-  // If using TLS, appName is assumed to be the name of the keys.
-  //process.argv.length === 3 && process.argv[2] === '--no-tls'
+  //If cert_name is provided, we connect with TLS, otherwise we do not
   this.connect = function (cert_name) {
     var client = null;
     if (!cert_name) {
@@ -115,9 +122,9 @@ var Mycroft = function(name, manifest, host, port) {
       });
       var obj = this;
       client.on('error', function(err) {
-        obj.logger.error("Connection error!")
-        obj.logger.error(err)
-        obj.handle('CONNECTION_ERROR', err)
+        obj.logger.error("Connection error!");
+        obj.logger.error(err);
+        obj.emit('CONNECTION_ERROR', err);
       });
     } else {
       this.logger.info("Using TLS");
@@ -134,107 +141,95 @@ var Mycroft = function(name, manifest, host, port) {
           this.logger.error('There was an error in establishing TLS connection');
         }
       });
-      var obj = this;
+      var sobj = this;
       client.on('error', function(err) {
-        obj.logger.error("Connection error!")
-        obj.logger.error(err)
-        obj.handle('CONNECTION_ERROR', err)
+        sobj.logger.error("Connection error!");
+        sobj.logger.error(err);
+        sobj.emit('CONNECTION_ERROR', err);
       });
     }
     this.logger.info('Connected to Mycroft');
     this.cli = client;
-    var obj = this;
+    var tobj = this;
     this.cli.on('data', function(msg) {
       var parsed = obj.parseMessage(msg);
       for(var i = 0; i < parsed.length; i++) {
-        obj.handle(parsed[i].type, parsed[i].data);
+        //This is what emits our events on message recival
+        tobj.emit(parsed[i].type, parsed[i].data);
       }
     });
     this.cli.on('end', function(data) {
       obj.connectionClosed(data);
     });
-  }
+  };
 
-  this.on = function(name, func) {
-    if (!this.handlers[name]) {
-      this.handlers[name] = [];
-    }
-    this.handlers[name].push(func);
-  }
-
+  //called when the process dies and the connection needs to be terminated
   this.connectionClosed = function(data) {
-    this.handle('CONNECTION_CLOSED', data)
+    this.emit('CONNECTION_CLOSED', data);
     this.down();
     this.logger.info("Connection closed.");
-  }
+  };
 
-  this.handle = function(type, data) {
-    if (this.handlers[type]) {
-      for (var i=0; i<this.handlers[type].length; i++) {
-        this.handlers[type][i](data);
-      }
-    } else {
-      this.logger.warn("not handling messages:");
-      this.logger.warn(type+": "+JSON.stringify(data));
-    }
-  }
-
-  //Given the path to a JSON manifest, converts that manifest to a string,
-  //and precedes it with the type MANIFEST
+  //Call with the path to an app manifest (otherwise we assume the default location)
+  //Sends the manifest to the server
   this.sendManifest = function (path) {
     var obj = this;
-    var path = path || this.manifest_loc; //use manifest location from constructor if possible
+    path = path || this.manifest_loc; //use manifest location from constructor if possible
     try {
-      this.logger.debug("Reading a manifest!")
+      this.logger.debug("Reading a manifest!");
       fs.readFile(path, 'utf-8', function(err, data) {
         if (err) {
           obj.logger.error("Error reading manifest:");
           obj.logger.error(err);
-          obj.handle('MANIFEST_ERROR', err);
+          obj.emit('MANIFEST_ERROR', err);
         }
 
         var json;
         try {
           json = JSON.parse(data);
         }
-        catch(err) {
+        catch(erro) {
           obj.logger.error("Error parsing manifest:");
-          obj.logger.error(err);
-          obj.handle('MANIFEST_ERROR', err);
+          obj.logger.error(erro);
+          obj.emit('MANIFEST_ERROR', erro);
         }
 
         if (json) {
           obj.logger.info('Sending Manifest');
           obj.sendMessage('APP_MANIFEST', json);
         }
-      })
+      });
     }
     catch(err) {
       obj.logger.error('Invalid file path');
-      obj.handle('MANIFEST_ERROR', err);
+      obj.emit('MANIFEST_ERROR', err);
     }
-  }
+  };
 
+  //Sends APP_UP
   this.up = function() {
     this.logger.info('Sending App Up');
     this.status = 'up';
     this.sendMessage('APP_UP');
-  }
+  };
 
+  //Sends APP_DOWN
   this.down = function() {
     this.logger.info('Sending App Down');
     this.status = 'down';
     this.sendMessage('APP_DOWN');
-  }
+  };
 
+  //Sends APP_IN_USE
   this.in_use = function() {
     this.logger.info('Sending App In Use');
     this.status = 'in use';
     this.sendMessage('APP_IN_USE');
-  }
+  };
 
+  //Sends a query to the server
   this.query = function (capability, action, data, instanceId, priority) {
-    this.logger.info('Sending query')
+    this.logger.info('Sending query');
     var queryMessage = {
       id: uuid.v4(),
       capability: capability,
@@ -245,54 +240,60 @@ var Mycroft = function(name, manifest, host, port) {
     };
 
     this.sendMessage('MSG_QUERY', queryMessage);
-  }
+  };
 
+  //Sends a query success to the server (only call if the server queries you)
   this.sendSuccess = function(id, ret) {
-    this.logger.info('Sending query success')
+    this.logger.info('Sending query success');
     var querySuccessMessage = {
       id: id,
       ret: ret
     };
 
     this.sendMessage('MSG_QUERY_SUCCESS', querySuccessMessage);
-  }
+  };
 
+  //Sends a query fail to the server (only call if the server queries you)
   this.sendFail = function (id, message) {
-    this.logger.info('Sending query fail')
+    this.logger.info('Sending query fail');
     var queryFailMessage = {
       id: id,
       message: message
     };
 
     this.sendMessage('MSG_QUERY_FAIL', queryFailMessage);
-  }
+  };
 
-  //Sends a message to the Mycroft global message board.
+  //Broadcasts a message
   this.broadcast = function(content) {
     this.logger.info('Sending broadcast');
-    message = {
+    var message = {
       id: uuid.v4(),
       content: content
     };
     this.sendMessage('MSG_BROADCAST', message);
-  }
+  };
 
+  //Logs that the manifest validated
   this.appManifestOk = function(){
     this.logger.info('Manifest Validated');
-  }
+  };
 
+  //Logs that manifest validations fails and throws an exception
   this.appManifestFail = function(){
-    this.logger.error('Invalid application manifest')
+    this.logger.error('Invalid application manifest');
     throw 'Invalid application manifest';
-  }
+  };
 
+  //Logs when a message fails
   this.msgGeneralFailure = function(data){
     this.logger.error(data.message);
-  }
+  };
 
   //Sends a message of specified type. Adds byte length before message.
   //Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
   this.sendMessage = function (type, message) {
+    this.emit('PRE_MESSAGE_SEND', type, message);
     if (typeof(message) === 'undefined') {
       message = '';
     } else {
@@ -306,18 +307,21 @@ var Mycroft = function(name, manifest, host, port) {
     } else {
       this.logger.error("The client connection wasn't established, so the message could not be sent.");
     }
-  }
+  };
 
+  //Updates 
   this.updateDependencies = function(deps) {
-    for(capability in deps){
-      this.dependencies.capability = this.dependencies.capability || {};
-      for(appId in deps.capability){
-        this.dependencies.capability.appId = deps.capability.appId;
+    for(var capability in deps){
+      this.dependencies[capability] = this.dependencies[capability] || {};
+      for(var appId in deps[capability]){
+        this.dependencies[capability][appId] = deps[capability][appId];
       }
     }
-  }
+  };
 
   // Some generic handlers that all apps will use
+  //Don't overwrite the called functions unless you need to remove their 
+  // functionality, instead just add another listener to that event
   this.on('APP_MANIFEST_OK', function(data){
     obj.appManifestOk();
   });
@@ -331,6 +335,7 @@ var Mycroft = function(name, manifest, host, port) {
   });
 
   return this;
-}
+};
 
-exports.Mycroft = Mycroft
+util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
+exports.Mycroft = Mycroft; //Exports the object
