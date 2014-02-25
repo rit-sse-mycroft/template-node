@@ -30,6 +30,7 @@ var MYCROFT_PORT = 1847;
 
 var Mycroft = function(name, manifest, host, port) {
 
+  this.name = name || 'mycroft_client';
   this.status = 'down';
   this.host = host || 'localhost';
   this.manifest_loc = manifest || 'app.json';
@@ -50,10 +51,11 @@ var Mycroft = function(name, manifest, host, port) {
   fs.mkdir('logs', function(err){});
 
   //Build and initialize the logger object
+  var thobj = this;
   this.logger = new (winston.Logger)({
     transports: [
       new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
-      new (winston.transports.DailyRotateFile)({dirname: 'logs', filename: name + '.log', timestamp: true, json: false})
+      new (winston.transports.DailyRotateFile)({dirname: 'logs', filename: thobj.name + '.log', timestamp: true, json: false})
     ]
   });
 
@@ -293,7 +295,6 @@ var Mycroft = function(name, manifest, host, port) {
   //Sends a message of specified type. Adds byte length before message.
   //Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
   this.sendMessage = function (type, message) {
-    this.emit('PRE_MESSAGE_SEND', type, message);
     if (typeof(message) === 'undefined') {
       message = '';
     } else {
@@ -309,7 +310,8 @@ var Mycroft = function(name, manifest, host, port) {
     }
   };
 
-  //Updates 
+  //Call with the a dependency table to update stored dependencies
+  //TODO: Call automatically, apparentl
   this.updateDependencies = function(deps) {
     for(var capability in deps){
       this.dependencies[capability] = this.dependencies[capability] || {};

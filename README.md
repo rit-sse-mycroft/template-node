@@ -56,9 +56,9 @@ Sends any old message with type string `type` and data block `data`.
 ##Events
 The client fires events for all message types it recieves, as it recieves them. (For example, `APP_DEPENDENCY` or `MSG_QUERY`) Additionally, it also fires:
 
-* CONNECTION_CLOSED - Emitted when the connection is closed
-* CONNECTION_ERROR - Emitted when the connection errors
-* MANIFEST_ERROR - Emitted when the manifest cannot be loaded
+* `CONNECTION_CLOSED` - Emitted when the connection is closed
+* `CONNECTION_ERROR` - Emitted when the connection errors
+* `MANIFEST_ERROR` - Emitted when the manifest cannot be loaded
 
 
 
