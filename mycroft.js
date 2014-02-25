@@ -1,4 +1,3 @@
-/* jshint node: true */
 var tls = require('tls');
 var net = require('net');
 var util = require('util');
@@ -340,4 +339,4 @@ var Mycroft = function(name, manifest, host, port) {
 };
 
 util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
-exports.Mycroft = Mycroft; //Exports the object
+module.exports = Mycroft; //Exports the object
