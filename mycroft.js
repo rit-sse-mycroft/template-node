@@ -96,7 +96,7 @@ var Mycroft = function(name, manifest, host, port) {
         }
         catch(err) {
           this.logger.error('Received malformed message, responding with MSG_MALFORMED');
-          this.sendMessage("MSG_MALFORMED \n" + err);
+          this.sendMessage("MSG_MALFORMED", err);
           return;
         }
       } else { // No body was supplied
@@ -150,17 +150,23 @@ var Mycroft = function(name, manifest, host, port) {
       });
     }
     this.logger.info('Connected to Mycroft');
+    this.setClient(client);
+  };
+  
+  this.setClient = function(client) {
     this.cli = client;
     var tobj = this;
     this.cli.on('data', function(msg) {
       var parsed = obj.parseMessage(msg);
-      for(var i = 0; i < parsed.length; i++) {
-        //This is what emits our events on message recival
-        tobj.emit(parsed[i].type, parsed[i].data);
+      if (parsed) {
+        for(var i = 0; i < parsed.length; i++) {
+          //This is what emits our events on message recival
+          tobj.emit(parsed[i].type, parsed[i].data);
+        }
       }
     });
     this.cli.on('end', function(data) {
-      obj.connectionClosed(data);
+      tobj.connectionClosed(data);
     });
   };
 

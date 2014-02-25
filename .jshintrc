@@ -1,7 +1,7 @@
 {
-    "node": true,
-    "globals": {
-      "describe": false,
-      "it": false
-    }
+  "node": true,
+  "globals": {
+    "describe": false,
+    "it": false
+  }
 }
