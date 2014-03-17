@@ -137,4 +137,43 @@ describe('The Mycroft Client', function() {
     match[1].should.not.be.null;
     client.conn.emit('end');
   });
+  
+  it('can parse two messages sent simultaneously', function(done) {
+    var obj = {
+      test: 'data'
+    }
+    var objstr = JSON.stringify(obj);
+    var typestr = 'TEST_DATA';
+    var body = typestr + ' ' + objstr;
+    var count = 0;
+    client.on(typestr, function(retobj) {
+      retobj.should.deep.equal(obj);
+      count = count + 1;
+      if (count===2)
+        done();
+    });
+    var size = Buffer.byteLength(body, 'utf8');
+    var data = new Buffer(size+'\n'+body);
+    var doublebuffer = Buffer.concat([data, data]);
+    client.conn.emit('data', doublebuffer);
+    client.conn.emit('end');  
+  });
+  
+  it('can parse a message sent in two parts', function(done) {
+    var obj = {
+      test: 'data'
+    }
+    var objstr = JSON.stringify(obj);
+    var typestr = 'TEST_DATA';
+    var body = typestr + ' ' + objstr;
+    client.on(typestr, function(retobj) {
+      retobj.should.deep.equal(obj);
+      done();
+    });
+    var size = Buffer.byteLength(body, 'utf8');
+    var data = new Buffer(size+'\n'+body);
+    client.conn.emit('data', data.slice(0,5));
+    client.conn.emit('data', data.slice(5));
+    client.conn.emit('end');  
+  });
 });

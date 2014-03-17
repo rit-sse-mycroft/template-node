@@ -143,7 +143,6 @@ Mycroft.prototype._compileMessage = function(data) {
     
   var message = remainder.slice(0, bytesize+1);
   this._msgDataBuffer = remainder.slice(bytesize+1);
-  
   //Loop until we find a space or a newline
   var spPos;
   for (var i=1; i<message.length; i++) {
@@ -161,6 +160,9 @@ Mycroft.prototype._compileMessage = function(data) {
   var message = message.slice(spPos);
   
   this._parseMsg(type.toString().trim(), message.toString().trim());
+  if (this._msgDataBuffer.length > 0) {
+    this._compileMessage(new Buffer(0));
+  }
 };
 
 //Sends a message of specified type. Adds byte length before message.
