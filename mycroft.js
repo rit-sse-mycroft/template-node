@@ -7,8 +7,6 @@ var fs = require('fs');
 var sys = require('sys');
 var exec = require('child_process').exec;
 var http = require('http');
-var winston = require('winston');
-var fs = require('fs');
 var EventEmitter = require('events').EventEmitter;
 var readLine = require("readline");
 
@@ -32,317 +30,245 @@ var Mycroft = function(name, manifest, host, port) {
   this.name = name || 'mycroft_client';
   this.status = 'down';
   this.host = host || 'localhost';
-  this.manifest_loc = manifest || 'app.json';
+  this.manifest_loc = manifest;
   this.port = port || MYCROFT_PORT;
   this.dependencies = {};
-
-  this._unconsumed = '';
+  this._msgDataBuffer = new Buffer(0);
 
   //Call our handler when the process dies and close the connection
-  var obj = this;
+  var self = this;
   process.on("SIGINT", function(){
     //graceful shutdown
-    obj.connectionClosed();
+    if (self.conn) {
+      self.conn.emit('end', {'sigint': true});
+      self.conn.destroy();
+    }
     process.exit();
   });
-
-  //Make a folder to put our logs in
-  fs.mkdir('logs', function(err){});
-
-  //Build and initialize the logger object
-  var thobj = this;
-  this.logger = new (winston.Logger)({
-    transports: [
-      new (winston.transports.Console)({ level: 'debug', colorize: true, timestamp: true }),
-      new (winston.transports.DailyRotateFile)({dirname: 'logs', filename: thobj.name + '.log', timestamp: true, json: false})
-    ]
-  });
-
-  // Parses a received message and returns an array of commands as
-  // an Object containing type:String and data:Object.
-  // There is not a doubt in my mind that this is not poorly written
-  this.parseMessage = function (msg) {
-    // Add the message to unconsumed.
-    this._unconsumed += msg.toString().trim();
-    // Create an array for the newly parsed commands.
-    var parsedCommands = [];
-
-    while (this._unconsumed !== '') {
-      // Get the message-length to read.
-      var verbStart = this._unconsumed.indexOf('\n');
-      var msgLen = parseInt(this._unconsumed.substr(0, verbStart));
-      // Cut off the message length header from unconsumed.
-      this._unconsumed = this._unconsumed.substr(verbStart+1);
-      // Figure out how many bytes we have left to consume.
-      var bytesLeft = Buffer.byteLength(this._unconsumed, 'utf8');
-      // Do not process anything if we do not have enough bytes.
-      if (bytesLeft < msgLen) {
-        break;
-      }
-      // Isolate the message we are actually handling.
-      var unconsumedBuffer = new Buffer(this._unconsumed);
-      msg = unconsumedBuffer.slice(0, msgLen).toString();
-      // Store remaining stuff in unconsumed.
-      this._unconsumed = unconsumedBuffer.slice(msgLen).toString();
-      // Go process this single message.
-      var type = '';
-      var data = {};
-      var index = msg.indexOf(' ');
-      if (index >= 0) { // If a body was supplied
-        type = msg.substr(0, index);
-        try {
-          var toParse = msg.substr(index);
-          data = JSON.parse(toParse);
-        }
-        catch(err) {
-          this.logger.error('Received malformed message, responding with MSG_MALFORMED');
-          this.sendMessage("MSG_MALFORMED", err);
-          return;
-        }
-      } else { // No body was supplied
-        type = msg;
-      }
-
-      this.logger.info('Got message: ' + type);
-      this.logger.debug(msg);
-
-      parsedCommands.push({type: type, data: data});
-    }
-    return parsedCommands;
-  };
-
-  //If cert_name is provided, we connect with TLS, otherwise we do not
-  this.connect = function (cert_name) {
-    var client = null;
-    if (!cert_name) {
-      this.logger.info("Not using TLS");
-      client = net.connect({port: this.port, host:this.host}, function(err) {
-        if (err) {
-          this.logger.error('There was an error establishing connection');
-        }
-      });
-      var obj = this;
-      client.on('error', function(err) {
-        obj.logger.error("Connection error!");
-        obj.logger.error(err);
-        obj.emit('CONNECTION_ERROR', err);
-      });
-    } else {
-      this.logger.info("Using TLS");
-      var connectOptions = {
-        key: fs.readFileSync(cert_name + '.key'),
-        cert: fs.readFileSync(cert_name + '.crt'),
-        ca: [ fs.readFileSync('ca.crt') ],
-        rejectUnauthorized: false,
-        port: this.port,
-        host: this.host
-      };
-      client = tls.connect(connectOptions, function(err) {
-        if (err) {
-          this.logger.error('There was an error in establishing TLS connection');
-        }
-      });
-      var sobj = this;
-      client.on('error', function(err) {
-        sobj.logger.error("Connection error!");
-        sobj.logger.error(err);
-        sobj.emit('CONNECTION_ERROR', err);
-      });
-    }
-    this.logger.info('Connected to Mycroft');
-    this.setClient(client);
-  };
   
-  this.setClient = function(client) {
-    this.cli = client;
-    var tobj = this;
-    this.cli.on('data', function(msg) {
-      var parsed = obj.parseMessage(msg);
-      if (parsed) {
-        for(var i = 0; i < parsed.length; i++) {
-          //This is what emits our events on message recival
-          tobj.emit(parsed[i].type, parsed[i].data);
-        }
-      }
-    });
-    this.cli.on('end', function(data) {
-      tobj.connectionClosed(data);
-    });
-  };
+  this.on('APP_DEPENDENCY', this._updateDependencies);
+};
+util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
 
-  //called when the process dies and the connection needs to be terminated
-  this.connectionClosed = function(data) {
-    this.emit('CONNECTION_CLOSED', data);
-    this.down();
-    this.logger.info("Connection closed.");
-  };
-
-  //Call with the path to an app manifest (otherwise we assume the default location)
-  //Sends the manifest to the server
-  this.sendManifest = function (path) {
-    var obj = this;
-    path = path || this.manifest_loc; //use manifest location from constructor if possible
-    try {
-      this.logger.debug("Reading a manifest!");
-      fs.readFile(path, 'utf-8', function(err, data) {
-        if (err) {
-          obj.logger.error("Error reading manifest:");
-          obj.logger.error(err);
-          obj.emit('MANIFEST_ERROR', err);
-        }
-
-        var json;
-        try {
-          json = JSON.parse(data);
-        }
-        catch(erro) {
-          obj.logger.error("Error parsing manifest:");
-          obj.logger.error(erro);
-          obj.emit('MANIFEST_ERROR', erro);
-        }
-
-        if (json) {
-          obj.logger.info('Sending Manifest');
-          obj.sendMessage('APP_MANIFEST', json);
-        }
-      });
+//Call with the a dependency table to update stored dependencies
+//TODO: Call automatically, apparently
+Mycroft.prototype._updateDependencies = function(deps) {
+  for(var capability in deps){
+    this.dependencies[capability] = this.dependencies[capability] || {};
+    for(var appId in deps[capability]){
+      this.dependencies[capability][appId] = deps[capability][appId];
     }
-    catch(err) {
-      obj.logger.error('Invalid file path');
-      obj.emit('MANIFEST_ERROR', err);
-    }
-  };
-
-  //Sends APP_UP
-  this.up = function() {
-    this.logger.info('Sending App Up');
-    this.status = 'up';
-    this.sendMessage('APP_UP');
-  };
-
-  //Sends APP_DOWN
-  this.down = function() {
-    this.logger.info('Sending App Down');
-    this.status = 'down';
-    this.sendMessage('APP_DOWN');
-  };
-
-  //Sends APP_IN_USE
-  this.in_use = function() {
-    this.logger.info('Sending App In Use');
-    this.status = 'in use';
-    this.sendMessage('APP_IN_USE');
-  };
-
-  //Sends a query to the server
-  this.query = function (capability, action, data, instanceId, priority) {
-    this.logger.info('Sending query');
-    var queryMessage = {
-      id: uuid.v4(),
-      capability: capability,
-      action: action || '',
-      data: data || '',
-      priority: priority || 30,
-      instanceId: instanceId || []
-    };
-
-    this.sendMessage('MSG_QUERY', queryMessage);
-  };
-
-  //Sends a query success to the server (only call if the server queries you)
-  this.sendSuccess = function(id, ret) {
-    this.logger.info('Sending query success');
-    var querySuccessMessage = {
-      id: id,
-      ret: ret
-    };
-
-    this.sendMessage('MSG_QUERY_SUCCESS', querySuccessMessage);
-  };
-
-  //Sends a query fail to the server (only call if the server queries you)
-  this.sendFail = function (id, message) {
-    this.logger.info('Sending query fail');
-    var queryFailMessage = {
-      id: id,
-      message: message
-    };
-
-    this.sendMessage('MSG_QUERY_FAIL', queryFailMessage);
-  };
-
-  //Broadcasts a message
-  this.broadcast = function(content) {
-    this.logger.info('Sending broadcast');
-    var message = {
-      id: uuid.v4(),
-      content: content
-    };
-    this.sendMessage('MSG_BROADCAST', message);
-  };
-
-  //Logs that the manifest validated
-  this.appManifestOk = function(){
-    this.logger.info('Manifest Validated');
-  };
-
-  //Logs that manifest validations fails and throws an exception
-  this.appManifestFail = function(){
-    this.logger.error('Invalid application manifest');
-    throw 'Invalid application manifest';
-  };
-
-  //Logs when a message fails
-  this.msgGeneralFailure = function(data){
-    this.logger.error(data.message);
-  };
-
-  //Sends a message of specified type. Adds byte length before message.
-  //Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
-  this.sendMessage = function (type, message) {
-    if (typeof(message) === 'undefined') {
-      message = '';
-    } else {
-      message = JSON.stringify(message);
-    }
-    var body = (type + ' ' + message).trim();
-    var length = Buffer.byteLength(body, 'utf8');
-    this.logger.debug(length + ' ' + body);
-    if (this.cli) {
-      this.cli.write(length + '\n' + body);
-    } else {
-      this.logger.error("The client connection wasn't established, so the message could not be sent.");
-    }
-  };
-
-  //Call with the a dependency table to update stored dependencies
-  //TODO: Call automatically, apparentl
-  this.updateDependencies = function(deps) {
-    for(var capability in deps){
-      this.dependencies[capability] = this.dependencies[capability] || {};
-      for(var appId in deps[capability]){
-        this.dependencies[capability][appId] = deps[capability][appId];
-      }
-    }
-  };
-
-  // Some generic handlers that all apps will use
-  //Don't overwrite the called functions unless you need to remove their 
-  // functionality, instead just add another listener to that event
-  this.on('APP_MANIFEST_OK', function(data){
-    obj.appManifestOk();
-  });
-
-  this.on('APP_MANIFEST_FAIL', function(data){
-    obj.appManifestFail();
-  });
-
-  this.on('MSG_GENERAL_FAILURE', function(data){
-    obj.msgGeneralFailure(data);
-  });
-
-  return this;
+  }
 };
 
-util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
+//If cert_name is provided, we connect with TLS, otherwise we do not
+Mycroft.prototype.connect = function (cert_name) {
+  var client = null;
+  if (!cert_name) {
+    client = net.connect({port: this.port, host:this.host}, function(err) {
+      this.emit('CONNECTION_ERROR', err);
+    });
+  } else {
+    var connectOptions = {
+      key: fs.readFileSync(cert_name + '.key'),
+      cert: fs.readFileSync(cert_name + '.crt'),
+      ca: [ fs.readFileSync('ca.crt') ],
+      rejectUnauthorized: false,
+      port: this.port,
+      host: this.host
+    };
+    client = tls.connect(connectOptions, function(err) { 
+      this.emit('CONNECTION_ERROR', err);
+    });
+  }
+    
+  this._setClient(client);
+};
+
+Mycroft.prototype._setClient = function(client) {
+  var self = this;
+  self.conn = client;
+  
+  self.conn.on('error', function(err) {
+    self.emit('CONNECTION_ERROR', err);
+  }); 
+  self.conn.on('data', function(data) {
+    self._compileMessage(data);
+  });
+  self.conn.on('end', function(data) {
+    self.emit('CONNECTION_CLOSED', data);
+    self.status = 'down';
+  });
+};
+
+Mycroft.prototype._parseMsg = function(type, data) {
+  var jsonobj = null;
+  if (data.trim()==='') {
+    return this.emit(type, jsonobj);
+  }
+  try {
+    jsonobj = JSON.parse(data);
+  } catch (e) {
+    this._sendMsg('MSG_GENERAL_FAILURE', {'received': data, 'message': 'Parsing JSON data failed.'});
+    return this.emit('MALFORMED_JSON', data);
+  }
+  return this.emit(type, jsonobj);
+};
+
+Mycroft.prototype._compileMessage = function(data) {
+  this._msgDataBuffer = Buffer.concat([this._msgDataBuffer, data]);
+  
+  //Iterate until newline
+  var pos;
+  for (var i=0; i<this._msgDataBuffer.length; i++) {
+    if (String.fromCharCode(this._msgDataBuffer[i])==='\n') {
+      pos = i;
+      break;
+    }
+  }
+  
+  //Return if one isn't found
+  if (!pos)
+    return;
+    
+  //Get the size of the message
+  var bytesize = parseInt(this._msgDataBuffer.slice(0,pos));
+  
+  //Get the remainder of the message
+  var remainder = this._msgDataBuffer.slice(pos);
+
+  //Ensure there is at least that size remaining
+  if (remainder.length<bytesize) 
+    return;
+    
+  var message = remainder.slice(0, bytesize+1);
+  this._msgDataBuffer = remainder.slice(bytesize+1);
+  
+  //Loop until we find a space or a newline
+  var spPos;
+  for (var i=1; i<message.length; i++) {
+    if (String.fromCharCode(message[i]).match(/[\s\n]/)) {
+      spPos = i;
+      break;
+    }
+  }
+  
+  //Couldn't find a type?
+  if (!spPos)
+    return;
+    
+  var type = message.slice(0, spPos);
+  var message = message.slice(spPos);
+  
+  this._parseMsg(type.toString().trim(), message.toString().trim());
+};
+
+//Sends a message of specified type. Adds byte length before message.
+//Does not need to specify a message object. (e.g. APP_UP and APP_DOWN)
+Mycroft.prototype._sendMsg = function (type, message) {
+  if (typeof(message) === 'undefined') {
+    message = '';
+  } else {
+    message = JSON.stringify(message);
+  }
+  var body = (type + ' ' + message).trim();
+  var length = Buffer.byteLength(body, 'utf8');
+  if (this.conn) {
+    this.conn.write(length + '\n' + body);
+  } else {
+    this.emit('CONNECTION_ERROR', {'error': 'Message send failed', 'data': {'type': type, 'message': message}})
+  }
+};
+
+//Call with the path to an app manifest (otherwise we assume the default location)
+//Sends the manifest to the server
+Mycroft.prototype.sendManifest = function (path) {
+  var self = this;
+  path = path || this.manifest_loc; //use manifest location from constructor if possible
+  try {
+    this.logger.debug("Reading a manifest!");
+    fs.readFile(path, 'utf-8', function(err, data) {
+      if (err) {
+        self.emit('MANIFEST_ERROR', err);
+      }
+
+      var json;
+      try {
+        json = JSON.parse(data);
+      }
+      catch(erro) {
+        self.emit('MANIFEST_ERROR', erro);
+      }
+
+      if (json) {
+        self.sendMessage('APP_MANIFEST', json);
+      }
+    });
+  }
+  catch(err) {
+    self.emit('MANIFEST_ERROR', err);
+  }
+};
+
+//Sends APP_UP
+Mycroft.prototype.up = function() {
+  this.status = 'up';
+  this._sendMsg('APP_UP');
+};
+
+//Sends APP_DOWN
+Mycroft.prototype.down = function() {
+  this.status = 'down';
+  this._sendMsg('APP_DOWN');
+};
+
+//Sends APP_IN_USE
+Mycroft.prototype.in_use = function() {
+  this.status = 'in use';
+  this._sendMsg('APP_IN_USE');
+};
+
+//Sends a query to the server
+Mycroft.prototype.query = function (capability, action, data, instanceId, priority) {
+  var queryMessage = {
+    id: uuid.v4(),
+    capability: capability,
+    action: action || '',
+    data: data || '',
+    priority: priority || 30,
+    instanceId: instanceId || []
+  };
+
+  this._sendMsg('MSG_QUERY', queryMessage);
+};
+
+//Sends a query success to the server (only call if the server queries you)
+Mycroft.prototype.sendSuccess = function(id, ret) {
+  var querySuccessMessage = {
+    id: id,
+    ret: ret
+  };
+
+  this._sendMsg('MSG_QUERY_SUCCESS', querySuccessMessage);
+};
+
+//Sends a query fail to the server (only call if the server queries you)
+Mycroft.prototype.sendFail = function (id, message) {
+  var queryFailMessage = {
+    id: id,
+    message: message
+  };
+
+  this._sendMsg('MSG_QUERY_FAIL', queryFailMessage);
+};
+
+//Broadcasts a message
+Mycroft.prototype.broadcast = function(content) {
+  var message = {
+    id: uuid.v4(),
+    content: content
+  };
+  this._sendMsg('MSG_BROADCAST', message);
+};
+
 module.exports = Mycroft; //Exports the object

@@ -11,12 +11,12 @@ describe('The Mycroft Client', function() {
   beforeEach(function() {
     written = null;
     client = new MycroftClient();
-    var cli = new EventEmitter(); //We can call .emit on this to simulate recieving 'data' and 'end'
-    cli.write = function(str) {
+    var ee = new EventEmitter(); //We can call .emit on this to simulate receiving 'data' and 'end'
+    ee.write = function(str) {
       written = str;
     };
     //Give it a fake 'client' instead of connecting for testing.
-    client.setClient(cli);
+    client._setClient(ee);
   });
   
   it('can send a message', function() {
@@ -24,7 +24,7 @@ describe('The Mycroft Client', function() {
       test: 'message'
     };
     var ttype = 'TEST_MESSAGE'
-    client.sendMessage(ttype, obj);
+    client._sendMsg(ttype, obj);
     var pat = new RegExp('\\d+\n'+ttype+' (.*)');
     var match = written.match(pat);
     match.should.not.be.null;
@@ -118,8 +118,9 @@ describe('The Mycroft Client', function() {
       done();
     });
     var size = Buffer.byteLength(body, 'utf8');
-    client.cli.emit('data', size+'\n'+body);
-    client.cli.emit('end');
+    var data = new Buffer(size+'\n'+body);
+    client.conn.emit('data', data);
+    client.conn.emit('end');
   });
   
   it('throws appropriately on malformed incoming data', function() {
@@ -127,12 +128,13 @@ describe('The Mycroft Client', function() {
     var typestr = 'TEST_DATA';
     var body = typestr + ' ' + objstr;
     var size = Buffer.byteLength(body, 'utf8');
-    client.cli.emit('data', size+'\n'+body);
+    var data = new Buffer(size+'\n'+body);
+    client.conn.emit('data', data);
     
-    var exptedtr = /\d+\nMSG_MALFORMED (.*)/;
+    var exptedtr = /\d+\nMSG_GENERAL_FAILURE (.*)/;
     var match = written.match(exptedtr);
     match.should.not.be.null;
     match[1].should.not.be.null;
-    client.cli.emit('end');
+    client.conn.emit('end');
   });
 });
