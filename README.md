@@ -50,8 +50,8 @@ Sends a `MSG_QUERY_SUCCES` to the connected server for specified `id` with the g
 Sends a `MSG_QUERY_FAIL` to the connected server for specified `id` with the given `message`.
 ###broadcast(content)
 Sends a `MSG_BROADCAST` to the connected server with the given `content` (should be a JSON object).
-###sendMessage(type, data)
-Sends any old message with type string `type` and data block `data`.
+###_sendMsg(type, data)
+Sends any old message with type string `type` and data block `data`. Used internally, external use should be limited.
 
 ##Events
 The client fires events for all message types it recieves, as it recieves them. (For example, `APP_DEPENDENCY` or `MSG_QUERY`) Additionally, it also fires:
