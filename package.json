@@ -17,11 +17,17 @@
   },
   "homepage": "https://github.com/rit-sse-mycroft/app-templates",
   "dependencies": {
-    "winston": "~0.7.2",
     "uuid": "~1.4.1"
   },
   "devDependencies": {
     "mocha": "~1.17.1",
-    "chai": "~1.9.0"
+    "chai": "~1.9.0",
+    "metalsmith": "~0.4.0",
+    "metalsmith-templates": "~0.3.0",
+    "metalsmith-prompt": "~0.3.0",
+  }
+ "preferGlobal": "true",
+  "bin": {
+    "mycroft-node" : "bin/mycroft-node.js"
   }
 }

@@ -23,7 +23,7 @@ describe('The Mycroft Client', function() {
     var obj = {
       test: 'message'
     };
-    var ttype = 'TEST_MESSAGE'
+    var ttype = 'TEST_MESSAGE';
     client._sendMsg(ttype, obj);
     var pat = new RegExp('\\d+\n'+ttype+' (.*)');
     var match = written.match(pat);
@@ -109,7 +109,7 @@ describe('The Mycroft Client', function() {
   it('parses incoming data correctly', function(done) {
     var obj = {
       test: 'data'
-    }
+    };
     var objstr = JSON.stringify(obj);
     var typestr = 'TEST_DATA';
     var body = typestr + ' ' + objstr;
@@ -141,7 +141,7 @@ describe('The Mycroft Client', function() {
   it('can parse two messages sent simultaneously', function(done) {
     var obj = {
       test: 'data'
-    }
+    };
     var objstr = JSON.stringify(obj);
     var typestr = 'TEST_DATA';
     var body = typestr + ' ' + objstr;
@@ -162,7 +162,7 @@ describe('The Mycroft Client', function() {
   it('can parse a message sent in two parts', function(done) {
     var obj = {
       test: 'data'
-    }
+    };
     var objstr = JSON.stringify(obj);
     var typestr = 'TEST_DATA';
     var body = typestr + ' ' + objstr;

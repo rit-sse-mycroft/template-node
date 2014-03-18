@@ -1,0 +1,22 @@
+{
+  "name": "{{name}}",
+  "version": "0.0.0",
+  "description": "{{desc}}",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "{{repo}}"
+  },
+  "author": "{{author}}",
+  "license": "{{license}}",
+  "dependencies": {
+    "mycroft": "~0.0.1"
+  },
+  "devDependencies": {
+    "mocha": "~1.17.1",
+    "chai": "~1.9.0"
+  }
+}

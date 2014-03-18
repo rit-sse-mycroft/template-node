@@ -51,7 +51,6 @@ var Mycroft = function(name, manifest, host, port) {
 util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
 
 //Call with the a dependency table to update stored dependencies
-//TODO: Call automatically, apparently
 Mycroft.prototype._updateDependencies = function(deps) {
   for(var capability in deps){
     this.dependencies[capability] = this.dependencies[capability] || {};
@@ -145,9 +144,9 @@ Mycroft.prototype._compileMessage = function(data) {
   this._msgDataBuffer = remainder.slice(bytesize+1);
   //Loop until we find a space or a newline
   var spPos;
-  for (var i=1; i<message.length; i++) {
-    if (String.fromCharCode(message[i]).match(/[\s\n]/)) {
-      spPos = i;
+  for (var j=1; j<message.length; j++) {
+    if (String.fromCharCode(message[j]).match(/[\s\n]/)) {
+      spPos = j;
       break;
     }
   }
@@ -157,9 +156,9 @@ Mycroft.prototype._compileMessage = function(data) {
     return;
     
   var type = message.slice(0, spPos);
-  var message = message.slice(spPos);
+  var jsonm = message.slice(spPos);
   
-  this._parseMsg(type.toString().trim(), message.toString().trim());
+  this._parseMsg(type.toString().trim(), jsonm.toString().trim());
   if (this._msgDataBuffer.length > 0) {
     this._compileMessage(new Buffer(0));
   }
@@ -178,7 +177,7 @@ Mycroft.prototype._sendMsg = function (type, message) {
   if (this.conn) {
     this.conn.write(length + '\n' + body);
   } else {
-    this.emit('CONNECTION_ERROR', {'error': 'Message send failed', 'data': {'type': type, 'message': message}})
+    this.emit('CONNECTION_ERROR', {'error': 'Message send failed', 'data': {'type': type, 'message': message}});
   }
 };
 
