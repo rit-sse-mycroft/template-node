@@ -16,19 +16,18 @@ cli.on('MANIFEST_OK', function(reply) {
 #MycroftClient
 ##Constructor
 ```
-var cli = new MycroftClient(logfile, manifestfile, hostname, port);
+var cli = new MycroftClient(name, manifestfile, hostname, port);
 ```
 All arguments are optional.
 
 ##Fields
 ```
-name //logfile name ass passed to contructor or 'mycroft_client'
+name //name of the application 
 status //current status, eg. 'down', 'up', or 'in_use'
 host //hostname as passed to the constructor or 'localhost'
-manifest_loc //manifest file location as passed to the contructor or 'app.json'
+manifest_loc //manifest file location as passed to the contructor
 port //port as passed to the contructor or 1847
 dependencies //dependency list as mantained by APP_DEPENDENCY messages
-logger //a winston logger used to record debug output
 ```
 
 ##Functions

@@ -26,6 +26,7 @@
     "prompt": "~0.2.12",
     "consolidate": "~0.10.0",
     "handlebars": "~2.0.0",
+    "async": "~0.2.10",
     "minimist": "~0.0.8"
   },
  "preferGlobal": "true",
