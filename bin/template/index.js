@@ -1,4 +1,5 @@
 var Client = require('mycroft');
+var path = require('path');
 
 function createApp(host, port, cert) {
   var client = new Client("{{name}}", path.resolve("app.json"), host, port);
