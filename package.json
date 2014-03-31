@@ -11,7 +11,12 @@
     "url": "https://github.com/rit-sse-mycroft/app-templates.git"
   },
   "author": "Society of Software Engineers",
-  "license": "BSD",
+  "licenses": [
+    {
+      "type": "BSD",
+      "type": "https://raw.github.com/rit-sse-mycroft/app-templates/master/LICENSE"
+    }
+  ],
   "bugs": {
     "url": "https://github.com/rit-sse-mycroft/app-templates/issues"
   },
