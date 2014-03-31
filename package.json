@@ -14,7 +14,7 @@
   "licenses": [
     {
       "type": "BSD",
-      "type": "https://raw.github.com/rit-sse-mycroft/template-node/master/LICENSE"
+      "url": "https://raw.github.com/rit-sse-mycroft/template-node/master/LICENSE"
     }
   ],
   "bugs": {
