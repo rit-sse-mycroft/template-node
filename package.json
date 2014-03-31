@@ -1,6 +1,6 @@
 {
   "name": "mycroft",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "node app template for mycroft",
   "main": "mycroft.js",
   "scripts": {
