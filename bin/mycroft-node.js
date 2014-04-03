@@ -5,6 +5,7 @@ var prompt = require('prompt');
 var render = require('consolidate').handlebars.render;
 var async = require('async');
 var argv = require('minimist')(process.argv.slice(2));
+var path = require('path');
 
 var usage = "usage: mycroft-node new [foldername]";
 
@@ -15,12 +16,12 @@ if ((argv._.length<1) || argv._[0]!=='new') {
 
 var dir = process.cwd();
 if (argv._.length>=2) {
-  dir += "\\\\"+argv._[1];
+  dir = path.join(dir, argv._[1]);
 }
 
 var m = new Metalsmith('/');
 m.dir = ''; //Erhmahgerd
-m.source(__dirname+'\\\\template');
+m.source(path.join(__dirname,'template'));
 m.destination(dir);
 m.use(ask);
 m.use(template);
