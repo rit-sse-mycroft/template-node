@@ -3,6 +3,13 @@ template-node
 
 mycroft.js is a mycroft client application module/class/template/interface used to interact with the mycroft ai core server. It exports the Mycroft object.
 
+# Generator
+To generate a new node application, run the following and follow the prompts.
+
+```
+mycroft-node new [foldername]
+```
+
 #Example
 ```js
 var MycroftClient = require('mycroft');
