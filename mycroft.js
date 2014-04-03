@@ -187,7 +187,6 @@ Mycroft.prototype.sendManifest = function (path) {
   var self = this;
   path = path || this.manifest_loc; //use manifest location from constructor if possible
   try {
-    this.logger.debug("Reading a manifest!");
     fs.readFile(path, 'utf-8', function(err, data) {
       if (err) {
         self.emit('MANIFEST_ERROR', err);
@@ -202,7 +201,7 @@ Mycroft.prototype.sendManifest = function (path) {
       }
 
       if (json) {
-        self.sendMessage('APP_MANIFEST', json);
+        self._sendMsg('APP_MANIFEST', json);
       }
     });
   }
