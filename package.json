@@ -22,17 +22,17 @@
   },
   "homepage": "https://github.com/rit-sse-mycroft/template-node",
   "dependencies": {
-    "uuid": "~1.4.1"
-  },
-  "devDependencies": {
-    "mocha": "~1.17.1",
-    "chai": "~1.9.0",
+    "uuid": "~1.4.1",
     "metalsmith": "~0.4.0",
     "prompt": "~0.2.12",
     "consolidate": "~0.10.0",
     "handlebars": "~2.0.0",
     "async": "~0.2.10",
     "minimist": "~0.0.8"
+  },
+  "devDependencies": {
+    "mocha": "~1.17.1",
+    "chai": "~1.9.0"
   },
  "preferGlobal": "true",
   "bin": {
