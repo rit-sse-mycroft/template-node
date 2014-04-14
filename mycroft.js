@@ -8,19 +8,6 @@ var sys = require('sys');
 var exec = require('child_process').exec;
 var http = require('http');
 var EventEmitter = require('events').EventEmitter;
-var readLine = require("readline");
-
-//Automatically adjust for win32 applications
-if(process.platform === "win32"){
-  var rl = readLine.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
-  rl.on("SIGINT", function (){
-    process.emit ("SIGINT");
-  });
-}
 
 //Default mycroft port, used if port is not passed to constructor
 var MYCROFT_PORT = 1847;
