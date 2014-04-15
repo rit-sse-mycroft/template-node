@@ -192,7 +192,7 @@ Mycroft.prototype._applyManifestOverrides = function(json) {
     }
   }
   return json;
-}
+};
 
 //Call with the path to an app manifest (otherwise we assume the default location)
 //Sends the manifest to the server
@@ -219,6 +219,7 @@ Mycroft.prototype.sendManifest = function (path) {
       }
 
       if (json) {
+        json = self._applyManifestOverrides(json);
         self._sendMsg('APP_MANIFEST', json);
       }
     });
