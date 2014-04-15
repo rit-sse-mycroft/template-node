@@ -14,10 +14,19 @@ var MYCROFT_PORT = 1847;
 
 var Mycroft = function(name, manifest, host, port) {
 
+  this._manifestOverrides = {};
+  if (manifest instanceof Object) {
+    //Use the given object as the manifest, sicne it was given instead of a path
+    this.manifest = manifest;
+  } else {
+    this.manifest_loc = manifest;
+  }
   this.name = name || 'mycroft_client';
+  if (name) {
+    this.addManifestOverride('instanceId', name); //Given name overrides instanceId
+  }
   this.status = 'down';
   this.host = host || 'localhost';
-  this.manifest_loc = manifest;
   this.port = port || MYCROFT_PORT;
   this.dependencies = {};
   this._msgDataBuffer = new Buffer(0);
@@ -32,10 +41,18 @@ var Mycroft = function(name, manifest, host, port) {
     }
     process.exit();
   });
-  
+
   this.on('APP_DEPENDENCY', this._updateDependencies);
 };
 util.inherits(Mycroft, EventEmitter); //Gives Mycroft instances the EventEmitter interface
+
+Mycroft.prototype.addManifestOverride = function(key, value) {
+  this._manifestOverrides[key] = value;
+};
+
+Mycroft.prototype.removeManifestOverride = function(key) {
+  delete this._manifestOverrides[key];
+};
 
 //Call with the a dependency table to update stored dependencies
 Mycroft.prototype._updateDependencies = function(deps) {
@@ -67,14 +84,14 @@ Mycroft.prototype.connect = function (cert_name) {
       this.emit('CONNECTION_ERROR', err);
     });
   }
-    
+
   this._setClient(client);
 };
 
 Mycroft.prototype._setClient = function(client) {
   var self = this;
   self.conn = client;
-  
+
   self.conn.on('error', function(err) {
     self.emit('CONNECTION_ERROR', err);
   }); 
@@ -103,7 +120,7 @@ Mycroft.prototype._parseMsg = function(type, data) {
 
 Mycroft.prototype._compileMessage = function(data) {
   this._msgDataBuffer = Buffer.concat([this._msgDataBuffer, data]);
-  
+
   //Iterate until newline
   var pos;
   for (var i=0; i<this._msgDataBuffer.length; i++) {
@@ -112,21 +129,21 @@ Mycroft.prototype._compileMessage = function(data) {
       break;
     }
   }
-  
+
   //Return if one isn't found
   if (!pos)
     return;
-    
+
   //Get the size of the message
   var bytesize = parseInt(this._msgDataBuffer.slice(0,pos));
-  
+
   //Get the remainder of the message
   var remainder = this._msgDataBuffer.slice(pos);
 
   //Ensure there is at least that size remaining
   if (remainder.length<bytesize) 
     return;
-    
+
   var message = remainder.slice(0, bytesize+1);
   this._msgDataBuffer = remainder.slice(bytesize+1);
   //Loop until we find a space or a newline
@@ -137,14 +154,14 @@ Mycroft.prototype._compileMessage = function(data) {
       break;
     }
   }
-  
+
   //Couldn't find a type?
   if (!spPos)
     return;
-    
+
   var type = message.slice(0, spPos);
   var jsonm = message.slice(spPos);
-  
+
   this._parseMsg(type.toString().trim(), jsonm.toString().trim());
   if (this._msgDataBuffer.length > 0) {
     this._compileMessage(new Buffer(0));
@@ -168,9 +185,23 @@ Mycroft.prototype._sendMsg = function (type, message) {
   }
 };
 
+Mycroft.prototype._applyManifestOverrides = function(json) {        
+  for (var k in this._manifestOverrides) {
+    if (this._manifestOverrides.hasOwnProperty(k) && (this._manifestOverrides[k]!==null)) {
+      json[k] = this._manifestOverrides[k];
+    }
+  }
+  return json;
+}
+
 //Call with the path to an app manifest (otherwise we assume the default location)
 //Sends the manifest to the server
 Mycroft.prototype.sendManifest = function (path) {
+  if ((!path) && this.manifest && this.manifest!==null) {
+    var json = this._applyManifestOverrides(this.manifest);
+    this._sendMsg('APP_MANIFEST', json);
+    return; //Had a manifest object
+  }
   var self = this;
   path = path || this.manifest_loc; //use manifest location from constructor if possible
   try {

@@ -19,6 +19,101 @@ describe('The Mycroft Client', function() {
     client._setClient(ee);
   });
   
+  it('can send a manifest', function() {
+    var obj = {
+      'instanceId': 'test'
+    };
+    client.manifest = obj; //Set manifest to avoid loading one from a file
+    client.sendManifest();
+    
+    var ttype = 'APP_MANIFEST';
+    var pat = new RegExp('\\d+\n'+ttype+' (.*)');
+    var match = written.match(pat);
+    match.should.not.be.null;
+    var retobj = JSON.parse(match[1]);
+    retobj.should.deep.equal(obj);
+  });
+  
+  it('can send a manifest with overloaded parameters', function() {
+    var key = 'instanceId';
+    var obj = {};
+    obj[key] = 'test';
+    
+    client.manifest = obj; //Set manifest to avoid loading one from a file
+    var rep = 'bigger_test';
+    client.addManifestOverride(key, rep);
+    client.sendManifest();
+    
+    obj[key] = rep;
+    var ttype = 'APP_MANIFEST';
+    var pat = new RegExp('\\d+\n'+ttype+' (.*)');
+    var match = written.match(pat);
+    match.should.not.be.null;
+    var retobj = JSON.parse(match[1]);
+    retobj.should.deep.equal(obj);
+  });
+  
+  it('can send a manifest with un-overloaded parameters', function() {
+    var key = 'instanceId';
+    var obj = {};
+    obj[key] = 'test';
+    
+    client.manifest = obj; //Set manifest to avoid loading one from a file
+    var rep = 'bigger_test';
+    client.addManifestOverride(key, rep);
+    client.removeManifestOverride(key);
+    client.sendManifest();
+    
+    var ttype = 'APP_MANIFEST';
+    var pat = new RegExp('\\d+\n'+ttype+' (.*)');
+    var match = written.match(pat);
+    match.should.not.be.null;
+    var retobj = JSON.parse(match[1]);
+    retobj.should.deep.equal(obj);
+  });
+  
+  it('can be constructed with an object as the manifest', function() {
+    var obj = {
+      'instanceId': 'test'
+    };
+    client = new MycroftClient(null, obj, null, null);
+    var ee = new EventEmitter(); 
+    ee.write = function(str) {
+      written = str;
+    };
+    client._setClient(ee);
+    client.sendManifest();
+    
+    var ttype = 'APP_MANIFEST';
+    var pat = new RegExp('\\d+\n'+ttype+' (.*)');
+    var match = written.match(pat);
+    match.should.not.be.null;
+    var retobj = JSON.parse(match[1]);
+    retobj.should.deep.equal(obj);
+  });  
+  
+  it('can be constructed with an object as the manifest and name override', function() {
+    var obj = {
+      'instanceId': 'test'
+    };
+    var name = 'best_test';
+    client = new MycroftClient(name, obj, null, null);
+    var ee = new EventEmitter(); 
+    ee.write = function(str) {
+      written = str;
+    };
+    client._setClient(ee);
+    client.sendManifest();
+    
+    obj['instanceId'] = name;
+    var ttype = 'APP_MANIFEST';
+    var pat = new RegExp('\\d+\n'+ttype+' (.*)');
+    var match = written.match(pat);
+    match.should.not.be.null;
+    var retobj = JSON.parse(match[1]);
+    retobj.should.deep.equal(obj);
+  });  
+
   it('can send a message', function() {
     var obj = {
       test: 'message'
